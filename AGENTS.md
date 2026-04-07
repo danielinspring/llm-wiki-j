@@ -181,6 +181,52 @@ At small scale (< ~100 sources, < ~300 wiki pages), `wiki/index.md` is sufficien
 
 ---
 
+## Database
+
+A PostgreSQL database mirrors the wiki's metadata for fast querying and graph analysis.
+
+**Schema:** three tables — `pages` (one row per file), `page_tags` (normalized tags),
+`page_links` (directed wikilink edges). Three views — `broken_links`, `orphan_pages`,
+`page_link_stats`.
+
+**One-time setup:**
+```bash
+psql $DATABASE_URL -f db_init.sql
+pip install -r requirements.txt
+```
+
+**Sync after every ingest or lint operation:**
+```bash
+python sync_wiki.py
+```
+
+Reads `DATABASE_URL` from the environment. Idempotent — safe to run multiple times.
+Options: `--dry-run` (preview without writing), `--wiki-dir PATH` (non-default location).
+
+**Useful queries for the Lint workflow:**
+```sql
+-- Broken wikilinks (target page not yet in DB)
+SELECT * FROM broken_links;
+
+-- Orphan pages (no inbound links)
+SELECT slug, category FROM orphan_pages ORDER BY category, slug;
+
+-- Most-linked hub pages
+SELECT slug, inbound_links FROM page_link_stats ORDER BY inbound_links DESC LIMIT 20;
+
+-- Pages not updated recently
+SELECT slug, updated FROM pages WHERE category != 'root' ORDER BY updated ASC LIMIT 20;
+
+-- Tag distribution
+SELECT tag, COUNT(*) FROM page_tags GROUP BY tag ORDER BY count DESC;
+```
+
+**Important:** the markdown files in `wiki/` are the source of truth. The DB is for tooling
+and analytics only — never make editorial decisions based on DB data alone. Always read the
+markdown files directly when answering queries or performing ingests.
+
+---
+
 ## Session Start Checklist
 
 At the start of each session:
